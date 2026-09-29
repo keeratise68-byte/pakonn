@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ตะลุยโลก AR แต่งตัวมาโรงเรียน - วิชาวิทยาการคำนวณ ป.2</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Kanit & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Three.js 3D Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- MediaPipe Hands & Camera Utils for Gesture AR -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        * {
+            font-family: 'Kanit', 'Inter', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            overflow-x: hidden;
+        }
+
+        /* Glassmorphism containers */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.82);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+        }
+
+        .glass-card {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Interactive Hover & Click Effects */
+        .interactive-btn {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .interactive-btn:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(56, 189, 248, 0.4);
+        }
+        .interactive-btn:active {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        /* Virtual Hand Gesture Cursor overlay */
+        #hand-cursor {
+            pointer-events: none;
+            transition: transform 0.05s ease-out;
+            z-index: 9999;
+        }
+
+        /* Certificate Print Styling */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #certificate-print-area, #certificate-print-area * {
+                visibility: visible;
+            }
+            #certificate-print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+                background: white;
+                color: black;
+            }
+        }
+
+        /* Pulsing Glow Animations */
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
+            50% { box-shadow: 0 0 30px rgba(245, 158, 11, 0.8); }
+        }
+        .pulse-glow {
+            animation: pulseGlow 2s infinite;
+        }
+
+        /* Scrollbar aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.8);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.6);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between relative bg-slate-950 text-slate-100">
+
+    <!-- Background Camera Stream for AR Mode -->
+    <video id="webcam-feed" class="fixed inset-0 w-full h-full object-cover opacity-0 pointer-events-none transition-opacity duration-500 z-0" autoplay playsinline muted></video>
+    
+    <!-- AR Canvas Overlay for visual particle feedback -->
+    <canvas id="ar-overlay-canvas" class="fixed inset-0 w-full h-full pointer-events-none z-0"></canvas>
+
+    <!-- Gesture Virtual Pointer Cursor -->
+    <div id="hand-cursor" class="fixed top-0 left-0 hidden flex items-center justify-center pointer-events-none">
+        <div class="w-10 h-10 rounded-full border-4 border-amber-400 bg-amber-400/30 animate-ping absolute"></div>
+        <div class="text-3xl drop-shadow-lg">🖐️</div>
+        <div id="hand-dwell-bar" class="absolute -bottom-2 w-12 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+            <div id="hand-dwell-fill" class="h-full bg-amber-400 w-0 transition-all"></div>
+        </div>
+    </div>
+
+    <!-- Top Header Navigation -->
+    <header class="relative z-30 w-full bg-slate-900/85 border-b border-indigo-500/30 px-4 py-3 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            
+            <!-- Logo & Title -->
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="showScreen('home')">
+                <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-400 via-sky-400 to-indigo-600 flex items-center justify-center text-2xl shadow-lg shadow-sky-500/20">
+                    🤖
+                </div>
+                <div>
+                    <h1 class="font-extrabold text-base md:text-xl bg-clip-text text-transparent bg-gradient-to-r from-amber-300 via-sky-300 to-indigo-200">
+                        ตะลุยโลก AR แต่งตัวมาโรงเรียน ✨
+                    </h1>
+                    <p class="text-[11px] text-sky-200/80 font-medium">
+                        วิชาวิทยาการคำนวณ ป.2 • ครูปกรณ์ เสียงเพราะ
+                    </p>
+                </div>
+            </div>
+
+            <!-- AR & Sound Controls Bar -->
+            <div class="flex items-center space-x-2 bg-slate-800/80 px-3 py-1.5 rounded-full border border-indigo-500/30">
+                
+                <!-- AR Camera Toggle Button -->
+                <button id="btn-toggle-camera" onclick="toggleARCamera()" class="px-3 py-1 rounded-full text-xs font-semibold flex items-center space-x-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 transition">
+                    <i class="fa-solid fa-camera text-sky-400" id="camera-icon"></i>
+                    <span id="camera-btn-text">โหมดกล้อง AR</span>
+                </button>
+
+                <!-- Hand Gesture Control Toggle Button -->
+                <button id="btn-toggle-hand" onclick="toggleHandTracking()" class="px-3 py-1 rounded-full text-xs font-semibold flex items-center space-x-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 transition">
+                    <i class="fa-solid fa-hand text-amber-400"></i>
+                    <span id="hand-btn-text">ควบคุมด้วยมือ 🖐️</span>
+                </button>
+
+                <div class="w-px h-4 bg-slate-700"></div>
+
+                <!-- Sound Toggle -->
+                <button onclick="toggleSound()" class="text-xs text-slate-300 hover:text-amber-300 p-1 transition">
+                    <i id="sound-icon" class="fa-solid fa-volume-high text-emerald-400"></i>
+                </button>
+            </div>
+
+            <!-- Total Stars Display -->
+            <div class="flex items-center space-x-2 bg-amber-500/20 px-3.5 py-1.5 rounded-full border border-amber-500/40 text-amber-300 text-xs font-bold">
+                <i class="fa-solid fa-star text-sm animate-spin-slow"></i>
+                <span>สะสมดาว: <strong id="total-stars-badge" class="text-white text-sm">0</strong>/12</span>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- Main Dynamic Screen Content Area -->
+    <main class="relative z-10 flex-1 max-w-6xl w-full mx-auto p-4 flex flex-col justify-center items-center">
+
+        <!-- ================= SCREEN 1: HOME / LANDING ================= -->
+        <section id="screen-home" class="w-full flex flex-col items-center text-center py-6">
+            <div class="glass-panel p-8 rounded-3xl max-w-3xl w-full border border-sky-500/30 shadow-2xl relative overflow-hidden">
+                <div class="absolute -top-10 -right-10 w-40 h-40 bg-sky-500/20 rounded-full blur-3xl"></div>
+                <div class="absolute -bottom-10 -left-10 w-40 h-40 bg-indigo-500/20 rounded-full blur-3xl"></div>
+
+                <div class="text-6xl mb-4 animate-bounce">🤖👕👟</div>
+                <h2 class="text-2xl md:text-4xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-amber-300 via-sky-300 to-indigo-200 mb-3">
+                    ยินดีต้อนรับสู่บทเรียนโค้ดดิ้ง AR!
+                </h2>
+                <p class="text-slate-300 text-xs md:text-sm max-w-xl mx-auto mb-6 leading-relaxed">
+                    เรียนรู้การคิดแก้ปัญหาอย่างเป็นขั้นตอน (Algorithm) ผ่านกิจกรรมแต่งตัวมาโรงเรียนสุดสนุก พร้อมจำลองการสั่งงานด้วยมือและโค้ดดิ้งหุ่นยนต์!
+                </p>
+
+                <!-- Activity Steps Navigation Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <!-- Step 1 Card -->
+                    <div onclick="showScreen('lesson')" class="glass-card p-4 rounded-2xl border border-sky-500/30 hover:border-sky-400 cursor-pointer interactive-btn text-left">
+                        <div class="text-2xl mb-2">📖</div>
+                        <h3 class="font-bold text-sky-300 text-sm mb-1">ขั้นที่ 1: ทบทวนบทเรียน</h3>
+                        <p class="text-[11px] text-slate-400">ศึกษาปัญหา 3 ขั้นตอนการแก้ปัญหา และอัลกอริทึมการแต่งตัว</p>
+                    </div>
+
+                    <!-- Step 2 Card -->
+                    <div onclick="showScreen('game')" class="glass-card p-4 rounded-2xl border border-amber-500/30 hover:border-amber-400 cursor-pointer interactive-btn text-left">
+                        <div class="text-2xl mb-2">🎮</div>
+                        <h3 class="font-bold text-amber-300 text-sm mb-1">ขั้นที่ 2: พิชิตเกม 4 ด่าน</h3>
+                        <p class="text-[11px] text-slate-400">ค้นหาปัญหา, เรียงลำดับ, เลือกเครื่องมือ และสั่งหุ่นยนต์</p>
+                    </div>
+
+                    <!-- Step 3 Card -->
+                    <div onclick="showScreen('certificate')" class="glass-card p-4 rounded-2xl border border-emerald-500/30 hover:border-emerald-400 cursor-pointer interactive-btn text-left">
+                        <div class="text-2xl mb-2">🏆</div>
+                        <h3 class="font-bold text-emerald-300 text-sm mb-1">ขั้นที่ 3: ออกเกียรติบัตร</h3>
+                        <p class="text-[11px] text-slate-400">เมื่อผ่านครบทุกด่าน พิมพ์ชื่อตนเองเพื่อรับเกียรติบัตรสุดเท่!</p>
+                    </div>
+                </div>
+
+                <!-- Action Button -->
+                <button onclick="showScreen('lesson')" class="interactive-btn px-8 py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 via-sky-400 to-indigo-500 text-slate-950 font-extrabold text-sm md:text-base shadow-xl shadow-sky-500/20 flex items-center justify-center mx-auto space-x-2">
+                    <span>🚀 เริ่มต้นบทเรียนเลย!</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- ================= SCREEN 2: LESSON REVIEW (3 CHAPTERS) ================= -->
+        <section id="screen-lesson" class="w-full flex flex-col items-center py-4 hidden">
+            <div class="glass-panel p-6 md:p-8 rounded-3xl max-w-3xl w-full border border-sky-500/30 shadow-2xl relative">
+                
+                <!-- Lesson Header -->
+                <div class="flex items-center justify-between border-b border-indigo-900/60 pb-3 mb-5">
+                    <div class="flex items-center space-x-3">
+                        <span class="text-2xl">📖</span>
+                        <div>
+                            <h2 class="text-lg font-extrabold text-sky-300">ทบทวนบทเรียน: การแต่งตัวมาโรงเรียน</h2>
+                            <p id="lesson-chapter-subtitle" class="text-xs text-slate-400">บทที่ 1 จาก 3 บท</p>
+                        </div>
+                    </div>
+                    <!-- Chapter Indicators -->
+                    <div class="flex space-x-2">
+                        <span id="dot-chap-1" class="w-3 h-3 rounded-full bg-sky-400"></span>
+                        <span id="dot-chap-2" class="w-3 h-3 rounded-full bg-slate-700"></span>
+                        <span id="dot-chap-3" class="w-3 h-3 rounded-full bg-slate-700"></span>
+                    </div>
+                </div>
+
+                <!-- Chapter 1 Content -->
+                <div id="lesson-content-1" class="space-y-4">
+                    <div class="bg-indigo-950/60 p-4 rounded-2xl border border-indigo-500/30 text-left">
+                        <h3 class="text-sm font-bold text-amber-300 mb-2 flex items-center">
+                            <i class="fa-solid fa-triangle-exclamation mr-2"></i>บทที่ 1: ปัญหาการแต่งตัวมาโรงเรียน
+                        </h3>
+                        <p class="text-xs text-slate-200 leading-relaxed mb-3">
+                            ในชีวิตประจำวัน นักเรียนอาจพบเจอ **"ปัญหา"** ในการแต่งตัวมาโรงเรียน เช่น:
+                        </p>
+                        <ul class="text-xs text-slate-300 space-y-2 pl-4 list-disc">
+                            <li><strong class="text-rose-300">แต่งตัวสาย / ตื่นสาย:</strong> ทำให้ไปโรงเรียนไม่ทันเวลา</li>
+                            <li><strong class="text-rose-300">หาถุงเท้าหรือรองเท้าไม่เจอ:</strong> เพราะวางทิ้งไว้ไม่เป็นที่</li>
+                            <li><strong class="text-rose-300">เสื้อผ้าชำรุด หรือเลอะเทอะ:</strong> เช่น กระดุมหลุด เสื้อยับ หรือรองเท้าเลอะโคลน</li>
+                        </ul>
+                    </div>
+                    <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700 text-xs text-center text-sky-200">
+                        💡 <strong>คำถามชวนคิด:</strong> นักเรียนเคยเจอปัญหาการแต่งตัวแบบไหนบ้างในตอนเช้า?
+                    </div>
+                </div>
+
+                <!-- Chapter 2 Content -->
+                <div id="lesson-content-2" class="space-y-4 hidden">
+                    <div class="bg-indigo-950/60 p-4 rounded-2xl border border-indigo-500/30 text-left">
+                        <h3 class="text-sm font-bold text-amber-300 mb-2 flex items-center">
+                            <i class="fa-solid fa-list-check mr-2"></i>บทที่ 2: 3 ขั้นตอนการแก้ปัญหา
+                        </h3>
+                        <p class="text-xs text-slate-200 leading-relaxed mb-3">
+                            เมื่อเกิดปัญหาขึ้น เราสามารถแก้ไขได้โดยใช้ **3 ขั้นตอน** ดังนี้:
+                        </p>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div class="bg-slate-900/90 p-3 rounded-xl border border-sky-500/30 text-center">
+                                <div class="text-xl mb-1">1️⃣</div>
+                                <div class="font-bold text-sky-300 text-xs mb-1">ระบุปัญหา</div>
+                                <div class="text-[10px] text-slate-400">รู้ว่าอะไรคือสิ่งที่เป็นปัญหา</div>
+                            </div>
+                            <div class="bg-slate-900/90 p-3 rounded-xl border border-amber-500/30 text-center">
+                                <div class="text-xl mb-1">2️⃣</div>
+                                <div class="font-bold text-amber-300 text-xs mb-1">วางแผนแก้ปัญหา</div>
+                                <div class="text-[10px] text-slate-400">คิดวิธีแก้ไขล่วงหน้า</div>
+                            </div>
+                            <div class="bg-slate-900/90 p-3 rounded-xl border border-emerald-500/30 text-center">
+                                <div class="text-xl mb-1">3️⃣</div>
+                                <div class="font-bold text-emerald-300 text-xs mb-1">ลงมือทำ</div>
+                                <div class="text-[10px] text-slate-400">ปฏิบัติตามแผนที่วางไว้</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chapter 3 Content -->
+                <div id="lesson-content-3" class="space-y-4 hidden">
+                    <div class="bg-indigo-950/60 p-4 rounded-2xl border border-indigo-500/30 text-left">
+                        <h3 class="text-sm font-bold text-amber-300 mb-2 flex items-center">
+                            <i class="fa-solid fa-diagram-project mr-2"></i>บทที่ 3: อัลกอริทึม (Algorithm)
+                        </h3>
+                        <p class="text-xs text-slate-200 leading-relaxed mb-3">
+                            **อัลกอริทึม** คือการเรียงลำดับขั้นตอนการทำงาน **ก่อน-หลัง** อย่างชัดเจน เช่น อัลกอริทึมการแต่งตัวนักเรียน:
+                        </p>
+                        <div class="bg-slate-900/90 p-3.5 rounded-xl border border-purple-500/30 flex items-center justify-around text-xs font-bold text-purple-200">
+                            <span>1. สวมชุดนักเรียน 👔</span>
+                            <i class="fa-solid fa-arrow-right text-slate-500"></i>
+                            <span>2. สวมถุงเท้า 🧦</span>
+                            <i class="fa-solid fa-arrow-right text-slate-500"></i>
+                            <span>3. สวมรองเท้า 👟</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Navigation Control Buttons -->
+                <div class="flex items-center justify-between mt-6 pt-4 border-t border-indigo-900/60">
+                    <button id="btn-lesson-prev" onclick="changeLessonChapter(-1)" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center space-x-1 border border-slate-700">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        <span>ย้อนกลับ</span>
+                    </button>
+
+                    <button id="btn-lesson-next" onclick="changeLessonChapter(1)" class="interactive-btn px-6 py-2.5 rounded-xl bg-gradient-to-r from-sky-400 to-indigo-500 text-slate-950 font-extrabold text-xs flex items-center space-x-1 shadow-lg shadow-sky-500/20">
+                        <span id="lesson-next-text">ถัดไป ➡️</span>
+                    </button>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ================= SCREEN 3: AR GAME LEVELS (4 LEVELS) ================= -->
+        <section id="screen-game" class="w-full flex flex-col items-center py-2 hidden">
+            
+            <!-- Game Level Selector & Progress Bar -->
+            <div class="glass-panel w-full max-w-4xl p-3 rounded-2xl mb-4 border border-indigo-500/30 flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center space-x-2">
+                    <span id="game-level-badge" class="px-3 py-1 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-extrabold text-xs">
+                        ด่านที่ 1/4
+                    </span>
+                    <h2 id="game-level-title" class="font-bold text-xs md:text-sm text-sky-300">
+                        ค้นหาปัญหาของการแต่งตัว
+                    </h2>
+                </div>
+
+                <!-- Level Tabs -->
+                <div class="flex items-center space-x-1.5">
+                    <button onclick="switchGameLevel(1)" id="lvl-tab-1" class="w-8 h-8 rounded-xl font-bold text-xs bg-amber-500 text-slate-950 border border-amber-400 shadow">1</button>
+                    <button onclick="switchGameLevel(2)" id="lvl-tab-2" class="w-8 h-8 rounded-xl font-bold text-xs bg-slate-800 text-slate-400 border border-slate-700">2</button>
+                    <button onclick="switchGameLevel(3)" id="lvl-tab-3" class="w-8 h-8 rounded-xl font-bold text-xs bg-slate-800 text-slate-400 border border-slate-700">3</button>
+                    <button onclick="switchGameLevel(4)" id="lvl-tab-4" class="w-8 h-8 rounded-xl font-bold text-xs bg-slate-800 text-slate-400 border border-slate-700">4</button>
+                </div>
+            </div>
+
+            <!-- LEVEL 1: ค้นหาปัญหา (Find Problems) -->
+            <div id="game-level-1-view" class="glass-panel w-full max-w-4xl p-5 md:p-6 rounded-3xl border border-sky-500/30 flex flex-col items-center">
+                <div class="text-xs text-amber-300 font-bold mb-1 flex items-center space-x-1">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <span>ภารกิจ: อ่านข้อความ แล้วคลิก/ชี้เลือกสิ่งที่เป็น "ปัญหาของการแต่งตัว" ให้ถูกต้องครบ 3 ข้อ</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mb-4">เลือกปัญหาได้แล้ว: <span id="l1-count" class="text-amber-400 font-bold">0</span>/3 ข้อ</div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full max-w-2xl mb-6">
+                    <!-- Option 1 (Problem) -->
+                    <button onclick="toggleL1Option(this, true)" class="l1-opt p-3.5 rounded-2xl bg-slate-900/80 border border-slate-700 hover:border-sky-400 text-left flex items-center space-x-3 transition interactive-btn">
+                        <span class="text-2xl">⏰</span>
+                        <div>
+                            <div class="font-bold text-xs text-slate-200">ตื่นสายแต่งตัวไม่ทัน</div>
+                            <div class="text-[10px] text-slate-400">ทำให้ไปโรงเรียนไม่ทันเวลา</div>
+                        </div>
+                    </button>
+
+                    <!-- Option 2 (Not Problem) -->
+                    <button onclick="toggleL1Option(this, false)" class="l1-opt p-3.5 rounded-2xl bg-slate-900/80 border border-slate-700 hover:border-sky-400 text-left flex items-center space-x-3 transition interactive-btn">
+                        <span class="text-2xl">✨</span>
+                        <div>
+                            <div class="font-bold text-xs text-slate-200">สวมเสื้อผ้าสะอาดเรียบร้อย</div>
+                            <div class="text-[10px] text-slate-400">ซักตากและพับเก็บอย่างดี</div>
+                        </div>
+                    </button>
+
+                    <!-- Option 3 (Problem) -->
+                    <button onclick="toggleL1Option(this, true)" class="l1-opt p-3.5 rounded-2xl bg-slate-900/80 border border-slate-700 hover:border-sky-400 text-left flex items-center space-x-3 transition interactive-btn">
+                        <span class="text-2xl">🧦</span>
+                        <div>
+                            <div class="font-bold text-xs text-slate-200">หาถุงเท้าอีกข้างไม่เจอ</div>
+                            <div class="text-[10px] text-slate-400">เพราะถอดทิ้งไว้ไม่เป็นที่</div>
+                        </div>
+                    </button>
+
+                    <!-- Option 4 (Problem) -->
+                    <button onclick="toggleL1Option(this, true)" class="l1-opt p-3.5 rounded-2xl bg-slate-900/80 border border-slate-700 hover:border-sky-400 text-left flex items-center space-x-3 transition interactive-btn">
+                        <span class="text-2xl">👟</span>
+                        <div>
+                            <div class="font-bold text-xs text-slate-200">รองเท้าเลอะคราบโคลน</div>
+                            <div class="text-[10px] text-slate-400">เหยียบบ่อน้ำในวันฝนตก</div>
+                        </div>
+                    </button>
+                </div>
+
+                <button onclick="checkL1Answer()" class="interactive-btn px-8 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-extrabold text-xs shadow-lg">
+                    ตรวจคำตอบ ด่าน 1 🎯
+                </button>
+            </div>
+
+            <!-- LEVEL 2: เรียงลำดับขั้นตอน (Sequence Steps) -->
+            <div id="game-level-2-view" class="glass-panel w-full max-w-4xl p-5 md:p-6 rounded-3xl border border-sky-500/30 flex flex-col items-center hidden">
+                <div class="text-xs text-amber-300 font-bold mb-1 flex items-center space-x-1">
+                    <i class="fa-solid fa-arrow-down-short-wide"></i>
+                    <span>ภารกิจ: คลิกเลือกขั้นตอนมาใส่ในช่อง 1 ➔ 2 ➔ 3 ให้ถูกต้องตามอัลกอริทึมการแต่งตัว</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mb-5">คลิกที่ตัวเลือกด้านล่างเพื่อส่งขึ้นไปเติมในช่องเรียงลำดับ</p>
+
+                <!-- Order Slot Containers -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-2xl mb-6">
+                    <div id="l2-slot-1" onclick="clearL2Slot(1)" class="bg-slate-900/90 border-2 border-dashed border-sky-500/50 p-4 rounded-2xl text-center min-h-[100px] flex flex-col items-center justify-center cursor-pointer hover:border-sky-400">
+                        <span class="text-[10px] text-sky-400 font-bold uppercase mb-1">ขั้นตอนที่ 1</span>
+                        <div id="l2-slot-1-text" class="text-xs font-bold text-slate-400">วางขั้นตอนที่ 1</div>
+                    </div>
+                    <div id="l2-slot-2" onclick="clearL2Slot(2)" class="bg-slate-900/90 border-2 border-dashed border-amber-500/50 p-4 rounded-2xl text-center min-h-[100px] flex flex-col items-center justify-center cursor-pointer hover:border-amber-400">
+                        <span class="text-[10px] text-amber-400 font-bold uppercase mb-1">ขั้นตอนที่ 2</span>
+                        <div id="l2-slot-2-text" class="text-xs font-bold text-slate-400">วางขั้นตอนที่ 2</div>
+                    </div>
+                    <div id="l2-slot-3" onclick="clearL2Slot(3)" class="bg-slate-900/90 border-2 border-dashed border-emerald-500/50 p-4 rounded-2xl text-center min-h-[100px] flex flex-col items-center justify-center cursor-pointer hover:border-emerald-400">
+                        <span class="text-[10px] text-emerald-400 font-bold uppercase mb-1">ขั้นตอนที่ 3</span>
+                        <div id="l2-slot-3-text" class="text-xs font-bold text-slate-400">วางขั้นตอนที่ 3</div>
+                    </div>
+                </div>
+
+                <!-- Available Choices -->
+                <div id="l2-choices-container" class="flex flex-wrap justify-center gap-3 w-full max-w-2xl mb-6">
+                    <button onclick="selectL2Step('สวมชุดนักเรียน 👔', this)" class="l2-choice px-4 py-2.5 rounded-xl bg-indigo-950 border border-indigo-500/50 hover:bg-indigo-900 text-xs font-bold text-indigo-200 interactive-btn">
+                        สวมชุดนักเรียน 👔
+                    </button>
+                    <button onclick="selectL2Step('สวมรองเท้า 👟', this)" class="l2-choice px-4 py-2.5 rounded-xl bg-indigo-950 border border-indigo-500/50 hover:bg-indigo-900 text-xs font-bold text-indigo-200 interactive-btn">
+                        สวมรองเท้า 👟
+                    </button>
+                    <button onclick="selectL2Step('สวมถุงเท้า 🧦', this)" class="l2-choice px-4 py-2.5 rounded-xl bg-indigo-950 border border-indigo-500/50 hover:bg-indigo-900 text-xs font-bold text-indigo-200 interactive-btn">
+                        สวมถุงเท้า 🧦
+                    </button>
+                </div>
+
+                <button onclick="checkL2Answer()" class="interactive-btn px-8 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-extrabold text-xs shadow-lg">
+                    ตรวจคำตอบ ด่าน 2 🎯
+                </button>
+            </div>
+
+            <!-- LEVEL 3: เลือกเครื่องมือแก้ไข (Select Repair Tools) -->
+            <div id="game-level-3-view" class="glass-panel w-full max-w-4xl p-5 md:p-6 rounded-3xl border border-sky-500/30 flex flex-col items-center hidden">
+                <div class="text-xs text-amber-300 font-bold mb-1 flex items-center space-x-1">
+                    <i class="fa-solid fa-wrench"></i>
+                    <span>ภารกิจ: จับคู่สถานการณ์เครื่องแต่งกาย ชำรุด/เลอะ กับเครื่องมือที่ใช้แก้ไขให้ถูกต้องทั้ง 3 ข้อ</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mb-5">เลือกเครื่องมือจากกล่องข้อความให้ตรงกับปัญหาฝั่งซ้าย</p>
+
+                <div class="space-y-3 w-full max-w-2xl mb-6">
+                    <!-- Match Pair 1 -->
+                    <div class="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center space-x-2.5">
+                            <span class="text-2xl">👕</span>
+                            <div class="text-left">
+                                <div class="font-bold text-xs text-slate-200">กระดุมเสื้อนักเรียนหลุด</div>
+                                <div class="text-[10px] text-slate-400">ต้องการเย็บติดกระดุมกลับคืน</div>
+                            </div>
+                        </div>
+                        <select id="l3-match-1" class="bg-slate-800 border border-sky-500/40 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-bold focus:outline-none">
+                            <option value="">-- เลือกเครื่องมือ --</option>
+                            <option value="iron">เตารีดผ้า 💨</option>
+                            <option value="needle">เข็มและด้ายเย็บผ้า 🪡</option>
+                            <option value="brush">แปรงขัดรองเท้า 🪥</option>
+                        </select>
+                    </div>
+
+                    <!-- Match Pair 2 -->
+                    <div class="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center space-x-2.5">
+                            <span class="text-2xl">👟</span>
+                            <div class="text-left">
+                                <div class="font-bold text-xs text-slate-200">รองเท้าเลอะโคลนแห้งกรัง</div>
+                                <div class="text-[10px] text-slate-400">ต้องการทำความสะอาดคราบ</div>
+                            </div>
+                        </div>
+                        <select id="l3-match-2" class="bg-slate-800 border border-sky-500/40 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-bold focus:outline-none">
+                            <option value="">-- เลือกเครื่องมือ --</option>
+                            <option value="iron">เตารีดผ้า 💨</option>
+                            <option value="needle">เข็มและด้ายเย็บผ้า 🪡</option>
+                            <option value="brush">แปรงขัดรองเท้า 🪥</option>
+                        </select>
+                    </div>
+
+                    <!-- Match Pair 3 -->
+                    <div class="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center space-x-2.5">
+                            <span class="text-2xl">👔</span>
+                            <div class="text-left">
+                                <div class="font-bold text-xs text-slate-200">เสื้อนักเรียนยับยู่ยี่</div>
+                                <div class="text-[10px] text-slate-400">ต้องการให้เสื้อเรียบตึง</div>
+                            </div>
+                        </div>
+                        <select id="l3-match-3" class="bg-slate-800 border border-sky-500/40 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-bold focus:outline-none">
+                            <option value="">-- เลือกเครื่องมือ --</option>
+                            <option value="iron">เตารีดผ้า 💨</option>
+                            <option value="needle">เข็มและด้ายเย็บผ้า 🪡</option>
+                            <option value="brush">แปรงขัดรองเท้า 🪥</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button onclick="checkL3Answer()" class="interactive-btn px-8 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-extrabold text-xs shadow-lg">
+                    ตรวจคำตอบ ด่าน 3 🎯
+                </button>
+            </div>
+
+            <!-- LEVEL 4: โค้ดดิ้งหุ่นยนต์ AR (Robot Dressing Grid Coding) -->
+            <div id="game-level-4-view" class="glass-panel w-full max-w-4xl p-4 md:p-6 rounded-3xl border border-sky-500/30 flex flex-col items-center hidden">
+                <div class="text-xs text-amber-300 font-bold mb-1 flex items-center space-x-1">
+                    <i class="fa-solid fa-robot"></i>
+                    <span>ภารกิจ: วางแผนกดลูกศรพาหุ่นยนต์ 🤖 เดินไปเก็บถุงเท้า 🧦 แล้วนำไปสวมรองเท้า 👟 ให้สำเร็จ!</span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 w-full mt-2 items-center">
+                    
+                    <!-- 2D/3D Grid Board (7 cols) -->
+                    <div class="md:col-span-7 flex flex-col items-center bg-slate-950/80 p-3 rounded-2xl border border-slate-800">
+                        <div id="robot-grid-board" class="grid grid-cols-4 gap-2 w-full max-w-xs">
+                            <!-- 4x4 Grid Cells dynamically injected -->
+                        </div>
+                        <div id="robot-status-text" class="text-[11px] text-sky-300 mt-2 font-semibold">
+                            สถานะ: พร้อมรับคำสั่งเดินหน้า!
+                        </div>
+                    </div>
+
+                    <!-- Command Coding Controls (5 cols) -->
+                    <div class="md:col-span-5 flex flex-col gap-2">
+                        <div class="text-xs font-bold text-sky-300">ชุดคำสั่งที่ป้อน (Sequence):</div>
+                        
+                        <!-- Program Queue Box -->
+                        <div id="robot-code-queue" class="bg-slate-900 p-2.5 rounded-xl border border-slate-700 min-h-[60px] flex flex-wrap gap-1.5 items-center">
+                            <span class="text-[10px] text-slate-500 italic">กดปุ่มลูกศรเพื่อเพิ่มคำสั่ง...</span>
+                        </div>
+
+                        <!-- Directional Buttons Grid -->
+                        <div class="grid grid-cols-3 gap-2 max-w-[180px] mx-auto my-1">
+                            <div></div>
+                            <button onclick="addRobotCommand('UP')" class="p-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-sm interactive-btn">⬆️</button>
+                            <div></div>
+                            <button onclick="addRobotCommand('LEFT')" class="p-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-sm interactive-btn">⬅️</button>
+                            <button onclick="addRobotCommand('DOWN')" class="p-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-sm interactive-btn">⬇️</button>
+                            <button onclick="addRobotCommand('RIGHT')" class="p-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-sm interactive-btn">➡️</button>
+                        </div>
+
+                        <!-- Action Controls -->
+                        <div class="flex space-x-2">
+                            <button onclick="clearRobotCommands()" class="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 font-bold text-xs border border-slate-700">
+                                ลบคำสั่ง 🗑️
+                            </button>
+                            <button onclick="runRobotProgram()" class="flex-1 py-2 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-extrabold text-xs shadow-lg">
+                                เล่นโค้ด ▶️
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ================= SCREEN 4: CERTIFICATE GENERATOR ================= -->
+        <section id="screen-certificate" class="w-full flex flex-col items-center py-4 hidden">
+            <div class="glass-panel p-6 md:p-8 rounded-3xl max-w-3xl w-full border border-emerald-500/30 shadow-2xl text-center">
+                
+                <div class="text-5xl mb-2">🏆</div>
+                <h2 class="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-emerald-300 to-indigo-200">
+                    เกียรติบัตรคนเก่ง!
+                </h2>
+                <p class="text-xs text-slate-300 mb-6">กรอกชื่อ-นามสกุลของนักเรียนเพื่อออกเกียรติบัตรเรียนรู้วิทยาการคำนวณ</p>
+
+                <!-- Input Name -->
+                <div class="max-w-md mx-auto mb-6">
+                    <label class="block text-xs font-bold text-sky-300 mb-2 text-left">✍️ พิมพ์ชื่อ - นามสกุล นักเรียน:</label>
+                    <input type="text" id="student-name-input" placeholder="เด็กชาย / เด็กหญิง..." 
+                        class="w-full px-4 py-3 rounded-2xl bg-slate-900 border-2 border-indigo-500/50 text-white text-sm font-bold focus:outline-none focus:border-amber-400 shadow-inner">
+                </div>
+
+                <!-- Certificate Display Card Preview -->
+                <div id="certificate-print-area" class="bg-amber-50/95 text-slate-900 p-6 md:p-8 rounded-2xl border-4 border-amber-400 shadow-2xl relative max-w-xl mx-auto my-4 text-center">
+                    
+                    <div class="border-2 border-amber-600 p-4 rounded-xl">
+                        <div class="text-2xl font-extrabold text-amber-800 mb-1">ใบประกาศเกียรติคุณ</div>
+                        <div class="text-[10px] tracking-widest text-amber-700 font-bold uppercase mb-4">CERTIFICATE OF ACHIEVEMENT</div>
+
+                        <div class="text-xs text-slate-700 mb-2">ขอมอบเกียรติบัตรฉบับนี้เพื่อแสดงว่า</div>
+                        
+                        <div id="cert-display-name" class="text-lg md:text-xl font-extrabold text-indigo-900 my-2 border-b-2 border-amber-400 inline-block px-6 py-1">
+                            [ พิมพ์ชื่อ-นามสกุล นักเรียน ]
+                        </div>
+
+                        <div class="text-xs text-slate-700 my-3 leading-relaxed">
+                            ได้ผ่านการปฏิบัติกิจกรรมการเรียนรู้ <br>
+                            <strong class="text-indigo-800">"ตะลุยโลก AR แต่งตัวมาโรงเรียน 🤖✨"</strong><br>
+                            วิชาวิทยาการคำนวณ ชั้นประถมศึกษาปีที่ 2
+                        </div>
+
+                        <div class="flex items-center justify-center space-x-1 text-amber-500 text-lg my-2">
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <i class="fa-solid fa-star"></i>
+                            <span id="cert-stars-text" class="text-xs font-bold text-amber-800 ml-2">(สะสม 12/12 ดาว)</span>
+                        </div>
+
+                        <div class="mt-6 pt-3 border-t border-amber-300 flex items-center justify-between text-[11px] text-slate-600">
+                            <div>
+                                <div>วันที่ออกเกียรติบัตร: <span id="cert-date">29 กันยายน 2569</span></div>
+                            </div>
+                            <div class="text-right">
+                                <div class="font-bold text-slate-800">คุณครูปกรณ์ เสียงเพราะ</div>
+                                <div class="text-[9px] text-slate-500">ครูผู้สอน วิชาวิทยาการคำนวณ</div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="flex space-x-3 justify-center mt-6">
+                    <button onclick="printCertificate()" class="interactive-btn px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-extrabold text-xs flex items-center space-x-2 shadow-lg">
+                        <i class="fa-solid fa-print"></i>
+                        <span>🪪 ออกเกียรติบัตร / พิมพ์</span>
+                    </button>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast-msg" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 hidden bg-slate-900 border border-amber-400 text-slate-100 px-5 py-2.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center space-x-2 text-xs">
+        <span id="toast-icon">💡</span>
+        <span id="toast-text">ข้อความแจ้งเตือน</span>
+    </div>
+
+    <!-- Footer -->
+    <footer class="relative z-20 w-full text-center py-3 text-[11px] text-slate-400 border-t border-indigo-900/40 bg-slate-950/80">
+        สื่อการสอน วิชาวิทยาการคำนวณ ป.2 • ครูปกรณ์ เสียงเพราะ &copy; 2026
+    </footer>
+
+    <script>
+        // Audio Synthesizer sound state
+        let soundEnabled = true;
+
+        // Stars & Level Progress State
+        let totalStars = 0;
+        let levelStars = [0, 0, 0, 0];
+        let currentLessonChap = 1;
+        let currentLevel = 1;
+
+        // Camera & AR State
+        let isCameraActive = false;
+        let isHandTrackingActive = false;
+        let webcamStream = null;
+
+        // Level 1 Selected Options State
+        let l1SelectedOpts = [];
+
+        // Level 2 Ordering State
+        let l2OrderSlots = [null, null, null];
+
+        // Level 4 Robot Grid State (4x4)
+        // Robot Start: (0,0), Socks: (2,1), Shoes: (3,3)
+        let robotPos = { x: 0, y: 0 };
+        let hasSocks = false;
+        let robotQueue = [];
+        let isRobotRunning = false;
+
+        // Switch Active Screen View
+        function showScreen(screenId) {
+            document.querySelectorAll('main > section').forEach(sec => sec.classList.add('hidden'));
+            document.getElementById(`screen-${screenId}`).classList.remove('hidden');
+            playAudio('click');
+
+            if (screenId === 'game') {
+                renderRobotGrid();
+            } else if (screenId === 'certificate') {
+                updateCertificateDate();
+            }
+        }
+
+        // Lesson Chapter Switcher
+        function changeLessonChapter(delta) {
+            currentLessonChap += delta;
+            if (currentLessonChap < 1) currentLessonChap = 1;
+            if (currentLessonChap > 3) {
+                showScreen('game');
+                return;
+            }
+
+            document.getElementById('lesson-chapter-subtitle').innerText = `บทที่ ${currentLessonChap} จาก 3 บท`;
+            
+            for (let i = 1; i <= 3; i++) {
+                document.getElementById(`lesson-content-${i}`).classList.add('hidden');
+                document.getElementById(`dot-chap-${i}`).className = "w-3 h-3 rounded-full bg-slate-700";
+            }
+            
+            document.getElementById(`lesson-content-${currentLessonChap}`).classList.remove('hidden');
+            document.getElementById(`dot-chap-${currentLessonChap}`).className = "w-3 h-3 rounded-full bg-sky-400";
+
+            if (currentLessonChap === 3) {
+                document.getElementById('lesson-next-text').innerText = "เริ่มทำเกม 🎮";
+            } else {
+                document.getElementById('lesson-next-text').innerText = "ถัดไป ➡️";
+            }
+
+            playAudio('step');
+        }
+
+        // AR Camera Toggle
+        async function toggleARCamera() {
+            const feed = document.getElementById('webcam-feed');
+            const icon = document.getElementById('camera-icon');
+            const text = document.getElementById('camera-btn-text');
+
+            if (!isCameraActive) {
+                try {
+                    webcamStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+                    feed.srcObject = webcamStream;
+                    feed.classList.remove('opacity-0');
+                    feed.classList.add('opacity-30');
+                    isCameraActive = true;
+                    icon.className = 'fa-solid fa-camera-rotate text-emerald-400';
+                    text.innerText = 'ปิดกล้อง AR';
+                    showToast('📷 เปิดโหมดกล้อง AR เรียบร้อยแล้ว!');
+                } catch (err) {
+                    showToast('⚠️ ไม่สามารถเข้าถึงกล้องได้ แต่สามารถเล่นได้ตามปกติ');
+                }
+            } else {
+                if (webcamStream) {
+                    webcamStream.getTracks().forEach(track => track.stop());
+                }
+                feed.classList.add('opacity-0');
+                feed.classList.remove('opacity-30');
+                isCameraActive = false;
+                icon.className = 'fa-solid fa-camera text-sky-400';
+                text.innerText = 'โหมดกล้อง AR';
+                showToast('📷 ปิดกล้อง AR แล้ว');
+            }
+        }
+
+        // Hand Gesture Tracking Toggle
+        function toggleHandTracking() {
+            isHandTrackingActive = !isHandTrackingActive;
+            const cursor = document.getElementById('hand-cursor');
+            const btnText = document.getElementById('hand-btn-text');
+
+            if (isHandTrackingActive) {
+                cursor.classList.remove('hidden');
+                btnText.innerText = 'ปิดจับมือ 🖐️';
+                showToast('🖐️ เปิดโหมดสั่งการด้วยมือแล้ว (ขยับเมาส์/สัมผัสเพื่อลองจำลอง)');
+                setupHandPointerSimulation();
+            } else {
+                cursor.classList.add('hidden');
+                btnText.innerText = 'ควบคุมด้วยมือ 🖐️';
+                showToast('🖐️ ปิดโหมดสั่งการด้วยมือแล้ว');
+            }
+        }
+
+        function setupHandPointerSimulation() {
+            const cursor = document.getElementById('hand-cursor');
+            window.addEventListener('mousemove', (e) => {
+                if (!isHandTrackingActive) return;
+                cursor.style.transform = `translate(${e.clientX - 20}px, ${e.clientY - 20}px)`;
+            });
+        }
+
+        // Game Level Selector
+        function switchGameLevel(levelNum) {
+            currentLevel = levelNum;
+            
+            const titles = [
+                "ค้นหาปัญหาของการแต่งตัว",
+                "เรียงลำดับขั้นตอนอัลกอริทึม",
+                "เลือกเครื่องมือแก้ไขให้เหมาะสม",
+                "โค้ดดิ้งหุ่นยนต์ AR แต่งตัว"
+            ];
+
+            document.getElementById('game-level-badge').innerText = `ด่านที่ ${levelNum}/4`;
+            document.getElementById('game-level-title').innerText = titles[levelNum - 1];
+
+            for (let i = 1; i <= 4; i++) {
+                document.getElementById(`game-level-${i}-view`).classList.add('hidden');
+                const tab = document.getElementById(`lvl-tab-${i}`);
+                tab.className = "w-8 h-8 rounded-xl font-bold text-xs bg-slate-800 text-slate-400 border border-slate-700";
+            }
+
+            document.getElementById(`game-level-${levelNum}-view`).classList.remove('hidden');
+            const activeTab = document.getElementById(`lvl-tab-${levelNum}`);
+            activeTab.className = "w-8 h-8 rounded-xl font-bold text-xs bg-amber-500 text-slate-950 border border-amber-400 shadow";
+
+            if (levelNum === 4) {
+                renderRobotGrid();
+            }
+
+            playAudio('click');
+        }
+
+        // LEVEL 1 Logic
+        function toggleL1Option(btn, isProblem) {
+            btn.classList.toggle('ring-2');
+            btn.classList.toggle('ring-amber-400');
+            btn.classList.toggle('bg-amber-950/40');
+
+            const isSel = btn.classList.contains('ring-amber-400');
+            btn.dataset.selected = isSel ? "true" : "false";
+            btn.dataset.isProblem = isProblem ? "true" : "false";
+
+            const selectedList = document.querySelectorAll('.l1-opt[data-selected="true"]');
+            document.getElementById('l1-count').innerText = selectedList.length;
+            playAudio('step');
+        }
+
+        function checkL1Answer() {
+            const selectedList = document.querySelectorAll('.l1-opt[data-selected="true"]');
+            let correctCount = 0;
+            let wrongCount = 0;
+
+            selectedList.forEach(btn => {
+                if (btn.dataset.isProblem === "true") correctCount++;
+                else wrongCount++;
+            });
+
+            if (correctCount === 3 && wrongCount === 0) {
+                levelStars[0] = 3;
+                updateTotalStars();
+                playAudio('win');
+                showToast('🎉 เก่งมาก! เลือกปัญหาการแต่งตัวได้ถูกต้องครบทั้ง 3 ข้อ');
+                setTimeout(() => switchGameLevel(2), 1200);
+            } else {
+                playAudio('fail');
+                showToast('❌ ยังไม่ถูกต้อง ลองสังเกตข้อที่เป็น "ปัญหา" อีกครั้งนะ');
+            }
+        }
+
+        // LEVEL 2 Logic
+        function selectL2Step(text, btn) {
+            for (let i = 0; i < 3; i++) {
+                if (l2OrderSlots[i] === null) {
+                    l2OrderSlots[i] = text;
+                    btn.classList.add('opacity-40', 'pointer-events-none');
+                    btn.dataset.slotIndex = i;
+                    document.getElementById(`l2-slot-${i+1}-text`).innerText = text;
+                    document.getElementById(`l2-slot-${i+1}-text`).className = "text-xs font-bold text-amber-300";
+                    playAudio('step');
+                    break;
+                }
+            }
+        }
+
+        function clearL2Slot(slotNum) {
+            const idx = slotNum - 1;
+            const text = l2OrderSlots[idx];
+            if (!text) return;
+
+            l2OrderSlots[idx] = null;
+            document.getElementById(`l2-slot-${slotNum}-text`).innerText = `วางขั้นตอนที่ ${slotNum}`;
+            document.getElementById(`l2-slot-${slotNum}-text`).className = "text-xs font-bold text-slate-400";
+
+            document.querySelectorAll('.l2-choice').forEach(btn => {
+                if (btn.innerText.trim() === text) {
+                    btn.classList.remove('opacity-40', 'pointer-events-none');
+                }
+            });
+
+            playAudio('click');
+        }
+
+        function checkL2Answer() {
+            // Correct order: 1. ชุดนักเรียน 2. ถุงเท้า 3. รองเท้า
+            if (l2OrderSlots[0]?.includes('ชุดนักเรียน') && l2OrderSlots[1]?.includes('ถุงเท้า') && l2OrderSlots[2]?.includes('รองเท้า')) {
+                levelStars[1] = 3;
+                updateTotalStars();
+                playAudio('win');
+                showToast('🎉 ถูกต้อง! ลำดับ: ชุดนักเรียน ➔ ถุงเท้า ➔ รองเท้า');
+                setTimeout(() => switchGameLevel(3), 1200);
+            } else {
+                playAudio('fail');
+                showToast('❌ เรียงลำดับยังไม่ถูกต้อง! ลองนึกถึงเวลาแต่งตัวจริงดูสิ');
+            }
+        }
+
+        // LEVEL 3 Logic
+        function checkL3Answer() {
+            const m1 = document.getElementById('l3-match-1').value;
+            const m2 = document.getElementById('l3-match-2').value;
+            const m3 = document.getElementById('l3-match-3').value;
+
+            if (m1 === 'needle' && m2 === 'brush' && m3 === 'iron') {
+                levelStars[2] = 3;
+                updateTotalStars();
+                playAudio('win');
+                showToast('🎉 สุดยอด! เลือกเครื่องมือแก้ไขอุปสรรคได้เหมาะสมครบถ้วน');
+                setTimeout(() => switchGameLevel(4), 1200);
+            } else {
+                playAudio('fail');
+                showToast('❌ จับคู่เครื่องมือยังไม่ถูกต้อง ลองทบทวนอีกครั้งนะ');
+            }
+        }
+
+        // LEVEL 4 Robot Grid Logic
+        function renderRobotGrid() {
+            const board = document.getElementById('robot-grid-board');
+            if (!board) return;
+            board.innerHTML = '';
+
+            for (let y = 0; y < 4; y++) {
+                for (let x = 0; x < 4; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = "w-14 h-14 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center text-xl relative shadow-inner";
+
+                    if (robotPos.x === x && robotPos.y === y) {
+                        cell.innerText = hasSocks ? '🤖🧦' : '🤖';
+                        cell.classList.add('border-amber-400', 'bg-amber-950/40');
+                    } else if (x === 2 && y === 1 && !hasSocks) {
+                        cell.innerText = '🧦';
+                    } else if (x === 3 && y === 3) {
+                        cell.innerText = '👟';
+                    } else {
+                        cell.innerText = '';
+                    }
+
+                    board.appendChild(cell);
+                }
+            }
+        }
+
+        function addRobotCommand(dir) {
+            if (isRobotRunning) return;
+            if (robotQueue.length >= 8) {
+                showToast('⚠️ ใส่คำสั่งสูงสุดได้ 8 บล็อกนะ');
+                return;
+            }
+
+            const symbols = { 'UP': '⬆️', 'DOWN': '⬇️', 'LEFT': '⬅️', 'RIGHT': '➡️' };
+            robotQueue.push(dir);
+
+            const queueBox = document.getElementById('robot-code-queue');
+            if (robotQueue.length === 1) queueBox.innerHTML = '';
+
+            const badge = document.createElement('span');
+            badge.className = "px-2 py-1 bg-sky-900 border border-sky-400 rounded-lg text-xs font-bold text-sky-200 animate-pop";
+            badge.innerText = symbols[dir];
+            queueBox.appendChild(badge);
+
+            playAudio('step');
+        }
+
+        function clearRobotCommands() {
+            if (isRobotRunning) return;
+            robotQueue = [];
+            robotPos = { x: 0, y: 0 };
+            hasSocks = false;
+            document.getElementById('robot-code-queue').innerHTML = '<span class="text-[10px] text-slate-500 italic">กดปุ่มลูกศรเพื่อเพิ่มคำสั่ง...</span>';
+            document.getElementById('robot-status-text').innerText = 'สถานะ: รีเซ็ตหุ่นยนต์แล้ว';
+            renderRobotGrid();
+            playAudio('click');
+        }
+
+        async function runRobotProgram() {
+            if (isRobotRunning || robotQueue.length === 0) return;
+
+            isRobotRunning = true;
+            robotPos = { x: 0, y: 0 };
+            hasSocks = false;
+            renderRobotGrid();
+
+            document.getElementById('robot-status-text').innerText = 'สถานะ: หุ่นยนต์กำลังทำงาน...';
+
+            for (let i = 0; i < robotQueue.length; i++) {
+                const dir = robotQueue[i];
+                if (dir === 'UP' && robotPos.y > 0) robotPos.y--;
+                else if (dir === 'DOWN' && robotPos.y < 3) robotPos.y++;
+                else if (dir === 'LEFT' && robotPos.x > 0) robotPos.x--;
+                else if (dir === 'RIGHT' && robotPos.x < 3) robotPos.x++;
+
+                // Check socks
+                if (robotPos.x === 2 && robotPos.y === 1 && !hasSocks) {
+                    hasSocks = true;
+                    showToast('🧦 หุ่นยนต์เก็บถุงเท้าแล้ว!');
+                    playAudio('win');
+                }
+
+                renderRobotGrid();
+                playAudio('step');
+                await new Promise(r => setTimeout(r, 500));
+            }
+
+            // Check goal
+            if (hasSocks && robotPos.x === 3 && robotPos.y === 3) {
+                levelStars[3] = 3;
+                updateTotalStars();
+                playAudio('win');
+                document.getElementById('robot-status-text').innerText = 'สถานะ: ภารกิจสำเร็จ! 🤖🧦👟';
+                showToast('🏆 ยินดีด้วย! สั่งหุ่นยนต์เก็บถุงเท้าไปใส่รองเท้าสำเร็จแล้ว');
+                setTimeout(() => showScreen('certificate'), 1500);
+            } else if (!hasSocks && robotPos.x === 3 && robotPos.y === 3) {
+                playAudio('fail');
+                document.getElementById('robot-status-text').innerText = 'สถานะ: อย่าลืมแวะเก็บถุงเท้าก่อนใส่รองเท้านะ!';
+                showToast('❌ หุ่นยนต์ยังไม่ได้เก็บถุงเท้าเลยครับ!');
+            } else {
+                playAudio('fail');
+                document.getElementById('robot-status-text').innerText = 'สถานะ: หุ่นยนต์ยังเดินไม่ถึงเป้าหมาย';
+            }
+
+            isRobotRunning = false;
+        }
+
+        // Update Total Stars
+        function updateTotalStars() {
+            totalStars = levelStars.reduce((a, b) => a + b, 0);
+            document.getElementById('total-stars-badge').innerText = totalStars;
+            document.getElementById('cert-stars-text').innerText = `(สะสม ${totalStars}/12 ดาว)`;
+        }
+
+        // Certificate Helpers
+        function updateCertificateDate() {
+            const nameInput = document.getElementById('student-name-input');
+            const nameDisplay = document.getElementById('cert-display-name');
+            
+            nameInput.oninput = function() {
+                nameDisplay.innerText = this.value.trim() !== '' ? this.value : '[ พิมพ์ชื่อ-นามสกุล นักเรียน ]';
+            };
+
+            const now = new Date();
+            const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+            document.getElementById('cert-date').innerText = `${now.getDate()} ${thaiMonths[now.getMonth()]} ${now.getFullYear() + 543}`;
+        }
+
+        function printCertificate() {
+            const name = document.getElementById('student-name-input').value;
+            if (!name) {
+                showToast('✍️ กรุณาพิมพ์ชื่อ-นามสกุลก่อนพิมพ์เกียรติบัตรนะ');
+                return;
+            }
+            window.print();
+        }
+
+        // Web Audio Sound Synthesizer
+        function playAudio(type) {
+            if (!soundEnabled) return;
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                if (type === 'click' || type === 'step') {
+                    osc.frequency.setValueAtTime(450, ctx.currentTime);
+                    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.08);
+                } else if (type === 'win') {
+                    [523, 659, 783, 1046].forEach((f, i) => {
+                        const o = ctx.createOscillator();
+                        const g = ctx.createGain();
+                        o.connect(g);
+                        g.connect(ctx.destination);
+                        o.frequency.setValueAtTime(f, ctx.currentTime + i * 0.08);
+                        g.gain.setValueAtTime(0.1, ctx.currentTime + i * 0.08);
+                        g.gain.linearRampToValueAtTime(0.01, ctx.currentTime + i * 0.08 + 0.2);
+                        o.start(ctx.currentTime + i * 0.08);
+                        o.stop(ctx.currentTime + i * 0.08 + 0.2);
+                    });
+                } else if (type === 'fail') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(220, ctx.currentTime);
+                    osc.frequency.linearRampToValueAtTime(110, ctx.currentTime + 0.25);
+                    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.25);
+                }
+            } catch (e) {}
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('sound-icon');
+            icon.className = soundEnabled ? 'fa-solid fa-volume-high text-emerald-400' : 'fa-solid fa-volume-xmark text-rose-400';
+            showToast(soundEnabled ? '🔊 เปิดเสียงแล้ว' : '🔇 ปิดเสียงแล้ว');
+        }
+
+        // Toast Helper
+        function showToast(msg) {
+            const toast = document.getElementById('toast-msg');
+            document.getElementById('toast-text').innerText = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3200);
+        }
+
+        // App Init
+        window.onload = function() {
+            showScreen('home');
+        };
+    </script>
+</body>
+</html>
